@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Traffic Survey Database Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <style>
+    :root {
+      --bg: #f3f1f1;
+      --card: #ffffff;
+      --text: #2f2a2c;
+      --muted: #6d6568;
+      --line: #d6cfd2;
+      --primary: #7a1f2b;
+      --primary-dark: #5f1620;
+      --accent: #f5eaed;
+      --ok: #6f8b72;
+      --warn: #a06a3a;
+      --bad: #9f2436;
+      --shadow: 0 10px 24px rgba(74, 43, 50, 0.10);
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: Arial, Helvetica, sans-serif; color: var(--text); background: var(--bg); }
+    .app { display: grid; grid-template-columns: 410px 1fr; height: 100vh; }
+    .sidebar { overflow-y: auto; padding: 18px; background: var(--card); border-right: 1px solid var(--line); box-shadow: var(--shadow); z-index: 1000; }
+    .brand { text-align: center; }
+    .brand-logo-wrap { background: var(--accent); border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin-bottom: 14px; }
+    .brand-logo { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+    .brand { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 16px; }
+    .brand-logo { width: 88px; height: auto; flex: 0 0 auto; }
+    .brand-text { min-width: 0; }
+    .brand h1 { margin: 0 0 6px; font-size: 24px; color: var(--primary); line-height: 1.1; }
+    .brand p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 13px; }
+    .panel { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+    .panel h2 { margin: 0 0 12px; font-size: 16px; color: var(--primary); }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
+    .field input, .field select { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; background: #fff; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { border: none; border-radius: 10px; padding: 10px 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: #e5dfe1; color: var(--text); }
+    .btn-secondary:hover { background: #d9d1d4; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat { background: var(--accent); border: 1px solid #dfd4d8; border-radius: 14px; padding: 12px; }
+    .stat .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .stat .value { font-size: 22px; font-weight: 800; color: var(--primary); }
+    .map-wrap { position: relative; }
+    #map { width: 100%; height: 100vh; }
+    .records-wrap { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead { position: sticky; top: 0; background: #f6f2f3; z-index: 1; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    tbody tr:hover { background: #f6f2f3; cursor: pointer; }
+    .note { color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 6px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+    .selected h3 { margin: 0 0 6px; font-size: 18px; }
+    .selected p { margin: 0 0 10px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-right: 6px; margin-bottom: 6px; }
+    .los { color: #fff; }
+    .los-a,.los-b { background: #15803d; }
+    .los-c,.los-d { background: #b45309; }
+    .los-e,.los-f { background: #b91c1c; }
+    .chart-box { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-top: 10px; }
+    canvas { max-width: 100%; }
+    .leaflet-popup-content { min-width: 280px; }
+    .popup-title { font-weight: 800; font-size: 16px; color: var(--primary); margin-bottom: 8px; }
+    .popup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .popup-card { background: #f6f2f3; border: 1px solid #dfd4d8; border-radius: 10px; padding: 8px; }
+    .popup-card small { display: block; color: var(--muted); margin-bottom: 2px; }
+    .report-area { position: fixed; left: -99999px; top: 0; width: 900px; background: white; padding: 24px; color: #111827; }
+    .report-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; color: var(--primary); }
+    .report-sub { font-size: 13px; color: #4b5563; margin-bottom: 16px; }
+    .report-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 18px; }
+    .report-card { border: 1px solid #d1d5db; border-radius: 10px; padding: 10px; background: #f6f2f3; }
+    .report-card .k { color: #6b7280; font-size: 11px; margin-bottom: 3px; text-transform: uppercase; }
+    .report-card .v { font-size: 18px; font-weight: 800; }
+
+    .subtext { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: -4px; margin-bottom: 10px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field.full { grid-column: 1 / -1; }
+    .field textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; background: #fff; min-height: 84px; resize: vertical; font-family: inherit; }
+    .field small { display:block; color: var(--muted); font-size: 11px; margin-top: 5px; }
+    .status-box { display:none; margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 13px; border: 1px solid var(--line); }
+    .status-box.show { display:block; }
+    .status-box.success { background: #eef8f0; color: #245c2c; border-color: #b8d6bf; }
+    .status-box.error { background: #fff1f2; color: #8a2030; border-color: #efc0c8; }
+
+    @media (max-width: 1100px) { .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } .sidebar { max-height: 58vh; border-right: none; border-bottom: 1px solid var(--line); } #map { height: 42vh; } .form-grid { grid-template-columns: 1fr; } }
+    @media print { body { background: #fff; } .app { display:none; } .report-area { position: static; width: auto; left: 0; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img class="brand-logo" src="SMDI_logo.png" alt="SMDI Consultants, Inc. logo" />
+        <div class="brand-text">
+          <h1>Traffic Survey Database</h1>
+          <p>SMDI Consultants, Inc. online traffic survey database with Carto Light basemap, satellite view, survey point analytics, and TIA-ready export tools.</p>
+        </div>
+      </div>
+
+      <section class="panel">
+        <h2>Filters</h2>
+        <div class="field">
+          <label for="searchInput">Search location / city / project</label>
+          <input id="searchInput" type="text" placeholder="e.g. Langgam, UAAP Arena, Sta. Rosa" />
+        </div>
+        <div class="field">
+          <label for="projectFilter">Project</label>
+          <select id="projectFilter"><option value="all">All Projects</option></select>
+        </div>
+        <div class="field">
+          <label for="yearFilter">Year</label>
+          <select id="yearFilter"><option value="all">All Years</option></select>
+        </div>
+        <div class="field">
+          <label for="provinceFilter">Province</label>
+          <select id="provinceFilter"><option value="all">All Provinces</option></select>
+        </div>
+        <div class="actions">
+          <button class="btn-primary" id="applyBtn">Apply</button>
+          <button class="btn-secondary" id="resetBtn">Reset</button>
+          <button class="btn-secondary" id="exportBtn">Export TIA PDF</button>
+        </div>
+      </section>
+
+
+      <section class="panel">
+        <h2>Data Settings</h2>
+        <p class="subtext">Add a new survey point directly in the website. Newly added records are saved in this browser for your internal database use.</p>
+        <form id="addDataForm">
+          <div class="form-grid">
+            <div class="field full">
+              <label for="newName">Survey Point Name</label>
+              <input id="newName" type="text" placeholder="e.g. R. Magsaysay Rd. / F. Benito Rd." required />
+            </div>
+            <div class="field">
+              <label for="newCity">City / Municipality</label>
+              <input id="newCity" type="text" placeholder="e.g. San Pedro" required />
+            </div>
+            <div class="field">
+              <label for="newProvince">Province</label>
+              <input id="newProvince" type="text" placeholder="e.g. Laguna" required />
+            </div>
+            <div class="field">
+              <label for="newProject">Project</label>
+              <input id="newProject" type="text" placeholder="e.g. McDonalds Langgam" required />
+            </div>
+            <div class="field">
+              <label for="newType">Type</label>
+              <input id="newType" type="text" value="Classified Volume Count" required />
+            </div>
+            <div class="field">
+              <label for="newYear">Year</label>
+              <input id="newYear" type="number" placeholder="2026" min="2000" max="2100" required />
+            </div>
+            <div class="field">
+              <label for="newAmPeak">AM Peak</label>
+              <input id="newAmPeak" type="text" placeholder="06:00 - 07:00" required />
+            </div>
+            <div class="field">
+              <label for="newPmPeak">PM Peak</label>
+              <input id="newPmPeak" type="text" placeholder="17:00 - 18:00" required />
+            </div>
+            <div class="field">
+              <label for="newAmPeakPCU">AM Peak PCU</label>
+              <input id="newAmPeakPCU" type="number" step="0.01" placeholder="0" required />
+            </div>
+            <div class="field">
+              <label for="newPmPeakPCU">PM Peak PCU</label>
+              <input id="newPmPeakPCU" type="number" step="0.01" placeholder="0" required />
+            </div>
+            <div class="field">
+              <label for="newTotalPCU">Total PCU</label>
+              <input id="newTotalPCU" type="number" step="0.01" placeholder="0" required />
+            </div>
+            <div class="field">
+              <label for="newLat">Latitude</label>
+              <input id="newLat" type="number" step="0.000001" placeholder="14.000000" required />
+            </div>
+            <div class="field">
+              <label for="newLng">Longitude</label>
+              <input id="newLng" type="number" step="0.000001" placeholder="121.000000" required />
+            </div>
+            <div class="field full">
+              <label for="newComposition">Vehicle Composition</label>
+              <textarea id="newComposition" placeholder='Enter one per line, example:
+Pvt. Cars=1200
+Motorcycles=2500
+Jeepneys=180
+Tricycle=350'></textarea>
+              <small>Format: Vehicle Class=Value. Leave blank to use zero values.</small>
+            </div>
+          </div>
+          <div class="actions">
+            <button type="submit" class="btn-primary">Add Survey Point</button>
+            <button type="button" class="btn-secondary" id="clearAddedDataBtn">Clear Added Records</button>
+          </div>
+          <div id="dataStatus" class="status-box"></div>
+        </form>
+      </section>
+
+
+      <section class="panel">
+        <h2>Map Layers</h2>
+        <div class="note">Use the layer control on the map to switch between Carto Light and Satellite view.</div>
+      </section>
+
+      <section class="panel">
+        <h2>Summary</h2>
+        <div class="stats">
+          <div class="stat"><div class="label">Survey Points</div><div class="value" id="statPoints">0</div></div>
+          <div class="stat"><div class="label">Projects</div><div class="value" id="statProjects">0</div></div>
+          <div class="stat"><div class="label">Total PCU</div><div class="value" id="statTotalPCU">0</div></div>
+          <div class="stat"><div class="label">Max Peak PCU</div><div class="value" id="statMaxPeakPCU">0</div></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Legend</h2>
+        <div class="legend-item"><span class="dot" style="background:#22c55e"></span> PCU-based LOS Proxy: A-B</div>
+        <div class="legend-item"><span class="dot" style="background:#f59e0b"></span> PCU-based LOS Proxy: C-D</div>
+        <div class="legend-item"><span class="dot" style="background:#ef4444"></span> PCU-based LOS Proxy: E-F</div>
+        <div class="note">The LOS displayed here is a PCU-volume proxy for quick screening. It is not a substitute for corridor-specific capacity analysis.</div>
+      </section>
+
+      <section class="panel selected" id="selectedPanel">
+        <h2>Selected Survey Point</h2>
+        <div id="selectedContent">Click a marker or table row to view charts and export a TIA-ready summary.</div>
+      </section>
+
+      <section class="panel">
+        <h2>Survey Records</h2>
+        <div class="records-wrap">
+          <table>
+            <thead>
+              <tr><th>Location</th><th>Project</th><th>Peak PCU</th></tr>
+            </thead>
+            <tbody id="recordsTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </aside>
+    <main class="map-wrap">
+      <div id="map"></div>
+    </main>
+  </div>
+
+  <div class="report-area" id="reportArea">
+    <div class="report-title">Traffic Survey Summary Report</div>
+    <div class="report-sub" id="reportSub"></div>
+    <div class="report-grid" id="reportKpis"></div>
+    <div style="margin-top:10px;font-weight:700;">Vehicle Composition</div>
+    <img id="reportPieImg" style="max-width:100%;border:1px solid #d1d5db;border-radius:10px;margin-top:8px;" />
+    <div style="margin-top:14px;font-weight:700;">AM vs PM Peak PCU</div>
+    <img id="reportBarImg" style="max-width:100%;border:1px solid #d1d5db;border-radius:10px;margin-top:8px;" />
+    <div style="margin-top:16px;font-size:12px;color:#6b7280;line-height:1.5;">Note: The LOS shown in this report is a PCU-based screening indicator derived from peak-hour PCU bands within the app and should be validated against the applicable roadway/intersection capacity methodology for final TIA conclusions.</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script>
+    const baseTrafficData = [{"id": 1, "name": "R.Magsaysay Rd. /  F. Benito Rd.", "city": "San Pedro", "province": "Laguna", "project": "McDonalds Langgam", "type": "Classified Volume Count", "year": 2026, "amPeak": "08:00- 09:00", "pmPeak": "18:00 - 19:00", "amPeakPCU": 782.0, "pmPeakPCU": 669.0, "totalPCU": 8072.0, "lat": 14.326137, "lng": 121.017819, "composition": {"Pvt. Cars": 1122.0, "Motorcycles": 9458.0, "Jeepneys": 799.0, "UV Express": 0.0, "Taxi": 0.0, "Bus": 0.0, "Van": 319.0, "Trucks": 202.0, "Truck/Trailer": 104.0, "Tanker/Semi-Trailer": 0.0, "Tricycle": 2779.0, "Modern Jeep": 493.0, "Other Vehicles": 1561.0, "Bicycle": 811.0}}, {"id": 2, "name": "Ortigas Avenue Ext./Tramo Rd.", "city": "Pasig City", "province": "Metro Manila", "project": "UAAP Arena", "type": "Classified Volume Count", "year": 2025, "amPeak": "11:00 -12:00", "pmPeak": "15:00 - 16:00", "amPeakPCU": 6324.0, "pmPeakPCU": 6521.0, "totalPCU": 78506.0, "lat": 14.590395, "lng": 121.089585, "composition": {"Pvt. Cars": 33838.0, "Motorcycles": 70955.0, "Jeepneys": 3836.0, "UV Express": 0.0, "Taxi": 0.0, "Bus": 340.0, "Van": 7246.0, "Trucks": 3729.0, "Truck/Trailer": 585.0, "Tanker/Semi-Trailer": 537.0, "Tricycle": 252.0, "Modern Jeep": 0.0, "Other Vehicles": 0.0, "Bicycle": 387.0}}, {"id": 3, "name": "Park Avenue/Eulogio Amang Rodriguez Ave.", "city": "Pasig City", "province": "Metro Manila", "project": "UAAP Arena", "type": "Classified Volume Count", "year": 2025, "amPeak": "07:00 -08:00", "pmPeak": "16:00 - 17:00", "amPeakPCU": 2068.0, "pmPeakPCU": 1517.0, "totalPCU": 22270.0, "lat": 14.594708, "lng": 121.088238, "composition": {"Pvt. Cars": 10938.0, "Motorcycles": 23208.0, "Jeepneys": 458.0, "UV Express": 0.0, "Taxi": 0.0, "Bus": 13.0, "Van": 1072.0, "Trucks": 877.0, "Truck/Trailer": 0.0, "Tanker/Semi-Trailer": 121.0, "Tricycle": 1089.0, "Modern Jeep": 0.0, "Other Vehicles": 3.0, "Bicycle": 3864.0}}, {"id": 4, "name": "C. Raymundo", "city": "Pasig City", "province": "Metro Manila", "project": "UAAP Arena", "type": "Classified Volume Count", "year": 2025, "amPeak": "11:00 - 12:00", "pmPeak": "13:00 - 14:00", "amPeakPCU": 1580.0, "pmPeakPCU": 1592.0, "totalPCU": 18515.0, "lat": 14.58708, "lng": 121.088696, "composition": {"Pvt. Cars": 7579.0, "Motorcycles": 14758.0, "Jeepneys": 499.0, "UV Express": 0.0, "Taxi": 0.0, "Bus": 68.0, "Van": 1427.0, "Trucks": 1372.0, "Truck/Trailer": 632.0, "Tanker/Semi-Trailer": 0.0, "Tricycle": 289.0, "Modern Jeep": 0.0, "Other Vehicles": 0.0, "Bicycle": 0.0}}, {"id": 5, "name": "Zabarte Rd. / Nissan Rd.", "city": "Caloocan City", "province": "Metro Manila", "project": "4PH Casa Aurora", "type": "Classified Volume Count", "year": 2026, "amPeak": "07:00 - 08:00", "pmPeak": "17:00 - 18:00", "amPeakPCU": 1130.0, "pmPeakPCU": 1014.0, "totalPCU": 11086.0, "lat": 14.765389, "lng": 121.043817, "composition": {"Pvt. Cars": 2790.0, "Motorcycles": 17626.0, "Jeepneys": 42.0, "UV Express": 0.0, "Taxi": 0.0, "Bus": 0.0, "Van": 807.0, "Trucks": 398.0, "Truck/Trailer": 242.0, "Tanker/Semi-Trailer": 0.0, "Tricycle": 784.0, "Modern Jeep": 329.0, "Other Vehicles": 0.0, "Bicycle": 2152.0}}, {"id": 6, "name": "Jasmin Rd. / Petunia Rd.", "city": "Caloocan City", "province": "Metro Manila", "project": "4PH Casa Aurora", "type": "Classified Volume Count", "year": 2026, "amPeak": "06:00 - 07:00", "pmPeak": "18:00 - 19:00", "amPeakPCU": 739.0, "pmPeakPCU": 861.0, "totalPCU": 7845.0, "lat": 14.771659, "lng": 121.030384, "composition": {"Pvt. Cars": 1830.0, "Motorcycles": 13672.0, "Jeepneys": 81.0, "UV Express": 0.0, "Taxi": 0.0, "Bus": 0.0, "Van": 539.0, "Trucks": 144.0, "Truck/Trailer": 144.0, "Tanker/Semi-Trailer": 0.0, "Tricycle": 1247.0, "Modern Jeep": 140.0, "Other Vehicles": 0.0, "Bicycle": 351.0}}, {"id": 7, "name": "St. Francis Rd. / 1st Rd.", "city": "Caloocan City", "province": "Metro Manila", "project": "4PH Casa Aurora", "type": "Classified Volume Count", "year": 2026, "amPeak": "06:00 - 07:00", "pmPeak": "18:00 - 19:00", "amPeakPCU": 731.0, "pmPeakPCU": 854.0, "totalPCU": 7764.0, "lat": 14.772312, "lng": 121.029973, "composition": {"Pvt. Cars": 1831.0, "Motorcycles": 13773.0, "Jeepneys": 134.0, "UV Express": 0.0, "Taxi": 0.0, "Bus": 0.0, "Van": 529.0, "Trucks": 145.0, "Truck/Trailer": 101.0, "Tanker/Semi-Trailer": 0.0, "Tricycle": 1258.0, "Modern Jeep": 84.0, "Other Vehicles": 0.0, "Bicycle": 330.0}}, {"id": 8, "name": "Macabling/Maharlika Hwy", "city": "Sta. Rosa", "province": "Laguna", "project": "The Centra Yard", "type": "Classified Volume Count", "year": 2025, "amPeak": "06:00 - 07:00", "pmPeak": "16:00 - 17:00", "amPeakPCU": 2335.0, "pmPeakPCU": 2434.0, "totalPCU": 30139.0, "lat": 14.302149, "lng": 121.103683, "composition": {"Pvt. Cars": 7274.0, "Motorcycles": 26410.0, "Jeepneys": 546.0, "UV Express": 0.0, "Taxi": 0.0, "Bus": 2022.0, "Van": 2681.0, "Trucks": 1331.0, "Truck/Trailer": 1338.0, "Tanker/Semi-Trailer": 0.0, "Tricycle": 2386.0, "Modern Jeep": 0.0, "Other Vehicles": 0.0, "Bicycle": 1425.0}}, {"id": 9, "name": "Maharlika Hwy/Rizal Blvd.", "city": "Sta. Rosa", "province": "Laguna", "project": "The Centra Yard", "type": "Classified Volume Count", "year": 2025, "amPeak": "10:00 - 11:00", "pmPeak": "14:00 - 15:00", "amPeakPCU": 2482.0, "pmPeakPCU": 2454.0, "totalPCU": 32776.0, "lat": 14.296587, "lng": 121.105645, "composition": {"Pvt. Cars": 8507.0, "Motorcycles": 35076.0, "Jeepneys": 2145.0, "UV Express": 0.0, "Taxi": 0.0, "Bus": 843.0, "Van": 2739.0, "Trucks": 1773.0, "Truck/Trailer": 630.0, "Tanker/Semi-Trailer": 0.0, "Tricycle": 2899.0, "Modern Jeep": 0.0, "Other Vehicles": 0.0, "Bicycle": 1435.0}}];
+    let trafficData = [];
+
+    const map = L.map('map').setView([14.48, 121.05], 9);
+
+    const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 20,
+      subdomains: 'abcd',
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    });
+
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri'
+    });
+
+    cartoLight.addTo(map);
+    L.control.layers({'Light Map (Carto)': cartoLight, 'Satellite': satellite}, null, {collapsed:false}).addTo(map);
+
+    const markersLayer = L.layerGroup().addTo(map);
+    const markerIndex = new Map();
+    let selectedItem = null;
+    let pieChart = null;
+    let barChart = null;
+
+    const searchInput = document.getElementById('searchInput');
+    const projectFilter = document.getElementById('projectFilter');
+    const yearFilter = document.getElementById('yearFilter');
+    const provinceFilter = document.getElementById('provinceFilter');
+    const recordsTable = document.getElementById('recordsTable');
+    const addDataForm = document.getElementById('addDataForm');
+    const dataStatus = document.getElementById('dataStatus');
+    const LOCAL_STORAGE_KEY = 'smdiTrafficSurveyAdditionalData';
+    const defaultCompositionKeys = ['Pvt. Cars','Motorcycles','Jeepneys','UV Express','Taxi','Bus','Van','Trucks','Truck/Trailer','Tanker/Semi-Trailer','Tricycle','Modern Jeep','Other Vehicles','Bicycle'];
+
+
+    function showStatus(message, type='success') {
+      dataStatus.textContent = message;
+      dataStatus.className = `status-box show ${type}`;
+    }
+
+    function normalizeComposition(raw) {
+      const composition = Object.fromEntries(defaultCompositionKeys.map(key => [key, 0]));
+      Object.entries(raw || {}).forEach(([key, value]) => {
+        composition[key] = Number(value) || 0;
+      });
+      return composition;
+    }
+
+    function parseCompositionText(text) {
+      if (!text.trim()) return normalizeComposition({});
+      const composition = {};
+      const lines = text.split(/\n+/).map(line => line.trim()).filter(Boolean);
+      for (const line of lines) {
+        const parts = line.split('=');
+        if (parts.length < 2) throw new Error(`Invalid vehicle composition entry: ${line}`);
+        const key = parts[0].trim();
+        const value = Number(parts.slice(1).join('=').trim().replace(/,/g, ''));
+        if (!key || Number.isNaN(value)) throw new Error(`Invalid vehicle composition entry: ${line}`);
+        composition[key] = value;
+      }
+      return normalizeComposition(composition);
+    }
+
+    function loadTrafficData() {
+      let saved = [];
+      try {
+        saved = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+      } catch (err) {
+        saved = [];
+      }
+      trafficData = [...baseTrafficData, ...saved.map(item => ({ ...item, composition: normalizeComposition(item.composition) }))];
+    }
+
+    function saveAdditionalData(items) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
+    }
+
+    function getAdditionalData() {
+      try {
+        return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '[]');
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function peakPCU(item) { return Math.max(Number(item.amPeakPCU)||0, Number(item.pmPeakPCU)||0); }
+
+    function getLos(item) {
+      const v = peakPCU(item);
+      if (v <= 800) return {label:'LOS A', cls:'los-a'};
+      if (v <= 1200) return {label:'LOS B', cls:'los-b'};
+      if (v <= 2000) return {label:'LOS C', cls:'los-c'};
+      if (v <= 3000) return {label:'LOS D', cls:'los-d'};
+      if (v <= 4500) return {label:'LOS E', cls:'los-e'};
+      return {label:'LOS F', cls:'los-f'};
+    }
+
+    function markerColor(item) {
+      const los = getLos(item).label;
+      if (['LOS A','LOS B'].includes(los)) return '#22c55e';
+      if (['LOS C','LOS D'].includes(los)) return '#f59e0b';
+      return '#ef4444';
+    }
+
+    function createMarkerIcon(color) {
+      return L.divIcon({
+        className: 'custom-marker',
+        html: `<div style="width:18px;height:18px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.25)"></div>`,
+        iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -8]
+      });
+    }
+
+    function popupHtml(item) {
+      const los = getLos(item);
+      return `
+        <div class="popup-title">${item.name}</div>
+        <div><strong>Project:</strong> ${item.project}</div>
+        <div><strong>Location:</strong> ${item.city}, ${item.province}</div>
+        <div><strong>Type:</strong> ${item.type}</div>
+        <div class="popup-grid">
+          <div class="popup-card"><small>AM Peak</small><strong>${item.amPeak}</strong></div>
+          <div class="popup-card"><small>PM Peak</small><strong>${item.pmPeak}</strong></div>
+          <div class="popup-card"><small>AM Peak PCU</small><strong>${Number(item.amPeakPCU).toLocaleString()}</strong></div>
+          <div class="popup-card"><small>PM Peak PCU</small><strong>${Number(item.pmPeakPCU).toLocaleString()}</strong></div>
+        </div>
+        <div style="margin-top:10px;"><span class="pill los ${los.cls}">${los.label}</span><span class="pill">Total PCU: ${Number(item.totalPCU).toLocaleString()}</span></div>
+        <div style="margin-top:8px;font-size:12px;color:#6b7280;">Click the marker or table row to open detailed charts in the sidebar.</div>
+      `;
+    }
+
+    function uniqueValues(key) { return [...new Set(trafficData.map(x => x[key]).filter(Boolean))].sort(); }
+
+    function populateFilters() {
+      const fill = (el, items, label) => {
+        el.innerHTML = `<option value="all">All ${label}</option>`;
+        items.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; el.appendChild(o); });
+      };
+      fill(projectFilter, uniqueValues('project'), 'Projects');
+      fill(yearFilter, uniqueValues('year'), 'Years');
+      fill(provinceFilter, uniqueValues('province'), 'Provinces');
+    }
+
+    function filterData() {
+      const q = searchInput.value.trim().toLowerCase();
+      return trafficData.filter(item => {
+        const text = [item.name, item.city, item.province, item.project, item.type].join(' ').toLowerCase();
+        const matchesQ = !q || text.includes(q);
+        const matchesProject = projectFilter.value === 'all' || item.project === projectFilter.value;
+        const matchesYear = yearFilter.value === 'all' || String(item.year) === yearFilter.value;
+        const matchesProvince = provinceFilter.value === 'all' || item.province === provinceFilter.value;
+        return matchesQ && matchesProject && matchesYear && matchesProvince;
+      });
+    }
+
+    function updateSummary(items) {
+      document.getElementById('statPoints').textContent = items.length;
+      document.getElementById('statProjects').textContent = new Set(items.map(x => x.project)).size;
+      document.getElementById('statTotalPCU').textContent = items.reduce((a,b)=>a+(Number(b.totalPCU)||0),0).toLocaleString();
+      document.getElementById('statMaxPeakPCU').textContent = (items.length ? Math.max(...items.map(peakPCU)) : 0).toLocaleString();
+    }
+
+    function renderMap(items) {
+      markersLayer.clearLayers();
+      markerIndex.clear();
+      const bounds = [];
+      items.forEach(item => {
+        const marker = L.marker([item.lat, item.lng], {icon:createMarkerIcon(markerColor(item))})
+          .bindPopup(popupHtml(item))
+          .on('click', () => selectItem(item));
+        marker.addTo(markersLayer);
+        markerIndex.set(item.id, marker);
+        bounds.push([item.lat, item.lng]);
+      });
+      if (bounds.length) map.fitBounds(bounds, {padding:[40,40]});
+    }
+
+    function renderTable(items) {
+      recordsTable.innerHTML = '';
+      if (!items.length) {
+        recordsTable.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#6b7280;">No records found.</td></tr>';
+        return;
+      }
+      items.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><strong>${item.name}</strong><br><span style="color:#6b7280">${item.city}, ${item.province}</span></td><td>${item.project}</td><td>${peakPCU(item).toLocaleString()}</td>`;
+        tr.addEventListener('click', () => {
+          map.setView([item.lat, item.lng], 15);
+          const marker = markerIndex.get(item.id);
+          if (marker) marker.openPopup();
+          selectItem(item);
+        });
+        recordsTable.appendChild(tr);
+      });
+    }
+
+    function compositionEntries(item) {
+      return Object.entries(item.composition).filter(([,v]) => Number(v) > 0);
+    }
+
+    function selectItem(item) {
+      selectedItem = item;
+      const los = getLos(item);
+      const container = document.getElementById('selectedContent');
+      container.innerHTML = `
+        <h3>${item.name}</h3>
+        <p><strong>Project:</strong> ${item.project}<br><strong>Location:</strong> ${item.city}, ${item.province}<br><strong>Survey Type:</strong> ${item.type}<br><strong>Year:</strong> ${item.year}</p>
+        <div><span class="pill los ${los.cls}">${los.label}</span><span class="pill">Peak PCU: ${peakPCU(item).toLocaleString()}</span><span class="pill">Total PCU: ${Number(item.totalPCU).toLocaleString()}</span></div>
+        <div class="popup-grid" style="margin-top:10px;">
+          <div class="popup-card"><small>AM Peak</small><strong>${item.amPeak}</strong></div>
+          <div class="popup-card"><small>PM Peak</small><strong>${item.pmPeak}</strong></div>
+          <div class="popup-card"><small>AM Peak PCU</small><strong>${Number(item.amPeakPCU).toLocaleString()}</strong></div>
+          <div class="popup-card"><small>PM Peak PCU</small><strong>${Number(item.pmPeakPCU).toLocaleString()}</strong></div>
+        </div>
+        <div class="chart-box"><canvas id="pieCanvas" height="240"></canvas></div>
+        <div class="chart-box"><canvas id="barCanvas" height="210"></canvas></div>
+        <div class="note" style="margin-top:10px;">LOS is shown as a PCU-band proxy for rapid screening in the map interface.</div>
+      `;
+
+      const entries = compositionEntries(item);
+      const pieCtx = document.getElementById('pieCanvas');
+      const barCtx = document.getElementById('barCanvas');
+      if (pieChart) pieChart.destroy();
+      if (barChart) barChart.destroy();
+
+      pieChart = new Chart(pieCtx, {
+        type: 'pie',
+        data: { labels: entries.map(x=>x[0]), datasets: [{ data: entries.map(x=>x[1]) }] },
+        options: { responsive:true, maintainAspectRatio:false, plugins: { legend: { position:'bottom' }, title: { display:true, text:'Full Vehicle Composition' } } }
+      });
+
+      barChart = new Chart(barCtx, {
+        type: 'bar',
+        data: { labels: ['AM Peak PCU','PM Peak PCU'], datasets: [{ data: [item.amPeakPCU, item.pmPeakPCU] }] },
+        options: { responsive:true, maintainAspectRatio:false, plugins: { legend: { display:false }, title: { display:true, text:'AM vs PM Peak PCU' } }, scales: { y: { beginAtZero:true } } }
+      });
+    }
+
+    function renderAll() {
+      populateFilters();
+      const items = filterData();
+      updateSummary(items);
+      renderMap(items);
+      renderTable(items);
+      if (items.length) {
+        if (!selectedItem || !items.some(x => x.id === selectedItem.id)) selectItem(items[0]);
+      } else {
+        document.getElementById('selectedContent').innerHTML = 'No matching survey points.';
+      }
+    }
+
+    async function exportPdf() {
+      if (!selectedItem) { alert('Please select a survey point first.'); return; }
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation:'portrait', unit:'pt', format:'a4' });
+      const los = getLos(selectedItem);
+      const reportSub = document.getElementById('reportSub');
+      reportSub.textContent = `${selectedItem.name} • ${selectedItem.project} • ${selectedItem.city}, ${selectedItem.province} • Year ${selectedItem.year}`;
+      const reportKpis = document.getElementById('reportKpis');
+      reportKpis.innerHTML = '';
+      [
+        ['AM Peak', selectedItem.amPeak],
+        ['PM Peak', selectedItem.pmPeak],
+        ['AM Peak PCU', Number(selectedItem.amPeakPCU).toLocaleString()],
+        ['PM Peak PCU', Number(selectedItem.pmPeakPCU).toLocaleString()],
+        ['Peak PCU', peakPCU(selectedItem).toLocaleString()],
+        ['Total PCU', Number(selectedItem.totalPCU).toLocaleString()],
+        ['LOS Proxy', los.label],
+        ['Survey Type', selectedItem.type]
+      ].forEach(([k,v]) => {
+        const div = document.createElement('div');
+        div.className = 'report-card';
+        div.innerHTML = `<div class="k">${k}</div><div class="v">${v}</div>`;
+        reportKpis.appendChild(div);
+      });
+
+      await new Promise(r => setTimeout(r, 300));
+      document.getElementById('reportPieImg').src = pieChart.toBase64Image();
+      document.getElementById('reportBarImg').src = barChart.toBase64Image();
+      await new Promise(r => setTimeout(r, 100));
+
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(20);
+      doc.setTextColor(15,95,168);
+      doc.text('Traffic Survey Summary Report', 40, 44);
+      doc.setFont('helvetica','normal');
+      doc.setTextColor(80,80,80);
+      doc.setFontSize(11);
+      doc.text(`${selectedItem.name} | ${selectedItem.project} | ${selectedItem.city}, ${selectedItem.province} | Year ${selectedItem.year}`, 40, 64);
+
+      doc.autoTable({
+        startY: 84,
+        theme: 'grid',
+        head: [['Metric','Value']],
+        body: [
+          ['Survey Type', selectedItem.type],
+          ['AM Peak', selectedItem.amPeak],
+          ['PM Peak', selectedItem.pmPeak],
+          ['AM Peak (Total PCU)', Number(selectedItem.amPeakPCU).toLocaleString()],
+          ['PM Peak (Total PCU)', Number(selectedItem.pmPeakPCU).toLocaleString()],
+          ['Peak PCU', peakPCU(selectedItem).toLocaleString()],
+          ['Total PCU', Number(selectedItem.totalPCU).toLocaleString()],
+          ['PCU-based LOS Proxy', los.label],
+          ['Latitude', selectedItem.lat],
+          ['Longitude', selectedItem.lng]
+        ],
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [15,95,168] }
+      });
+
+      const y1 = doc.lastAutoTable.finalY + 16;
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(31,41,55);
+      doc.text('Full Vehicle Composition', 40, y1);
+      doc.addImage(pieChart.toBase64Image(), 'PNG', 40, y1 + 10, 240, 220);
+      doc.text('AM vs PM Peak PCU', 310, y1);
+      doc.addImage(barChart.toBase64Image(), 'PNG', 310, y1 + 10, 240, 220);
+
+      const compositionTable = compositionEntries(selectedItem).map(([k,v]) => [k, Number(v).toLocaleString()]);
+      doc.autoTable({
+        startY: y1 + 250,
+        theme: 'striped',
+        head: [['Vehicle Class','Count']],
+        body: compositionTable,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [15,95,168] }
+      });
+
+      let y2 = doc.lastAutoTable.finalY + 18;
+      if (y2 > 760) { doc.addPage(); y2 = 48; }
+      doc.setFont('helvetica','bold');
+      doc.text('Interpretation Note', 40, y2);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(10);
+      doc.setTextColor(75,85,99);
+      doc.text('The LOS shown in this report is a screening indicator based on peak-hour PCU bands in the web map. For final TIA conclusions, validate against the applicable roadway or intersection capacity methodology and site-specific geometry.', 40, y2 + 16, { maxWidth: 515 });
+
+      const filename = `Traffic_Survey_Report_${selectedItem.project.replace(/[^a-z0-9]+/gi,'_')}_${selectedItem.id}.pdf`;
+      doc.save(filename);
+    }
+
+
+    addDataForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      try {
+        const additionalData = getAdditionalData();
+        const nextId = Math.max(0, ...baseTrafficData.map(item => item.id), ...additionalData.map(item => item.id || 0)) + 1;
+        const newItem = {
+          id: nextId,
+          name: document.getElementById('newName').value.trim(),
+          city: document.getElementById('newCity').value.trim(),
+          province: document.getElementById('newProvince').value.trim(),
+          project: document.getElementById('newProject').value.trim(),
+          type: document.getElementById('newType').value.trim(),
+          year: Number(document.getElementById('newYear').value),
+          amPeak: document.getElementById('newAmPeak').value.trim(),
+          pmPeak: document.getElementById('newPmPeak').value.trim(),
+          amPeakPCU: Number(document.getElementById('newAmPeakPCU').value),
+          pmPeakPCU: Number(document.getElementById('newPmPeakPCU').value),
+          totalPCU: Number(document.getElementById('newTotalPCU').value),
+          lat: Number(document.getElementById('newLat').value),
+          lng: Number(document.getElementById('newLng').value),
+          composition: parseCompositionText(document.getElementById('newComposition').value)
+        };
+
+        if (!newItem.name || !newItem.city || !newItem.province || !newItem.project || !newItem.type) throw new Error('Please complete all required fields.');
+        if ([newItem.year,newItem.amPeakPCU,newItem.pmPeakPCU,newItem.totalPCU,newItem.lat,newItem.lng].some(v => Number.isNaN(v))) throw new Error('Please enter valid numeric values for year, PCU, and coordinates.');
+
+        additionalData.push(newItem);
+        saveAdditionalData(additionalData);
+        loadTrafficData();
+        addDataForm.reset();
+        document.getElementById('newType').value = 'Classified Volume Count';
+        renderAll();
+        selectItem(newItem);
+        map.setView([newItem.lat, newItem.lng], 15);
+        const marker = markerIndex.get(newItem.id);
+        if (marker) marker.openPopup();
+        showStatus('New survey point added successfully.', 'success');
+      } catch (error) {
+        showStatus(error.message || 'Unable to add the survey point.', 'error');
+      }
+    });
+
+    document.getElementById('clearAddedDataBtn').addEventListener('click', () => {
+      if (!confirm('Clear all added records saved in this browser?')) return;
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      loadTrafficData();
+      addDataForm.reset();
+      document.getElementById('newType').value = 'Classified Volume Count';
+      renderAll();
+      showStatus('All added browser-saved records were cleared.', 'success');
+    });
+
+    document.getElementById('applyBtn').addEventListener('click', renderAll);
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      searchInput.value = ''; projectFilter.value='all'; yearFilter.value='all'; provinceFilter.value='all'; renderAll();
+    });
+    document.getElementById('exportBtn').addEventListener('click', exportPdf);
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') renderAll(); });
+    projectFilter.addEventListener('change', renderAll);
+    yearFilter.addEventListener('change', renderAll);
+    provinceFilter.addEventListener('change', renderAll);
+
+    loadTrafficData();
+    populateFilters();
+    document.getElementById('newType').value = 'Classified Volume Count';
+    renderAll();
+  </script>
+</body>
+</html>
